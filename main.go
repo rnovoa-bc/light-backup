@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -28,25 +27,6 @@ func main() {
 
 	dbFile = filepath.Join(baseFolder, "db", "light-backup.db")
 
-	fmt.Println("Database file:", dbFile)
-	if utils.FileExists(dbFile) {
-		fmt.Println("Database file exists.")
-	} else {
-		fmt.Println("Database file does not exist.")
-		fmt.Println("Creating necessary directories...")
-		err := os.MkdirAll(filepath.Dir(dbFile), os.ModePerm)
-		if err != nil {
-			log.Fatal("Error creating directories:", err)
-		}
-		fmt.Println("Directories created.")
-		fmt.Println("Creating database...")
-		_, err = utils.CreateDatabase(dbFile)
-		if err != nil {
-			log.Fatal("Error creating database:", err)
-		}
-		fmt.Println("Database created successfully.")
-	}
-
 	// Process command-line arguments
 	if len(os.Args) < 2 {
 		printUsage()
@@ -58,6 +38,9 @@ func main() {
 	restoreCommand := flag.NewFlagSet("restore", flag.ExitOnError)
 	helpCommand := flag.NewFlagSet("help", flag.ExitOnError)
 	versionCommand := flag.NewFlagSet("version", flag.ExitOnError)
+	setupCommand := flag.NewFlagSet("setup", flag.ExitOnError)
+	newDestination := flag.NewFlagSet("new-destination", flag.ExitOnError)
+	testSource := flag.NewFlagSet("test-source", flag.ExitOnError)
 
 	switch os.Args[1] {
 	case "backup":
@@ -74,6 +57,51 @@ func main() {
 	case "version":
 		versionCommand.Parse(os.Args[2:])
 		printVersion()
+	case "setup":
+		// Create and initialize the database
+		shouldInit := setupCommand.Bool("initialize", false, "Initialize the database schema")
+		setupCommand.Parse(os.Args[2:])
+		log.Println("Should initialize:", *shouldInit)
+		err := utils.CreateDatabase(dbFile, shouldInit)
+		if err != nil {
+			log.Fatal("Error initializing database:", err)
+		}
+	case "new-destination":
+		region := newDestination.String("region", "", "Region of the destination")
+		bucket := newDestination.String("bucket", "", "Bucket name of the destination")
+		accessKey := newDestination.String("access_key", "", "Access key for the destination")
+		secretKey := newDestination.String("secret_key", "", "Secret key for the destination")
+		newDestination.Parse(os.Args[2:])
+
+		if *region == "" || *bucket == "" || *accessKey == "" || *secretKey == "" {
+			log.Fatal("All parameters (region, bucket, access_key, secret_key) are required")
+		}
+
+		db, err := utils.OpenDatabase(dbFile)
+		if err != nil {
+			log.Fatal("Error opening database:", err)
+		}
+		defer db.Close()
+
+		id, err := utils.AddDestination(db, *region, *bucket, *accessKey, *secretKey)
+		if err != nil {
+			log.Fatal("Error adding new destination:", err)
+		}
+		log.Printf("New destination [%v] added successfully", id)
+	case "test-source":
+		sourcePath := testSource.String("path", "", "Path of the source to test")
+		sourceType := testSource.String("type", "local", "Type of the source (local, nfs, etc.)")
+		sourceOptions := testSource.String("options", "", "Options for the source (JSON encoded)")
+		testSource.Parse(os.Args[2:])
+		if *sourcePath == "" {
+			log.Fatal("Source path is required")
+		}
+		log.Printf("Testing source with path: %s, type: %s, options: %s", *sourcePath, *sourceType, *sourceOptions)
+		// Implement source testing logic here
+		err := utils.WalkDirectory(*sourcePath)
+		if err != nil {
+			log.Fatal("Error testing source:", err)
+		}
 	default:
 		printUsage()
 		os.Exit(1)
@@ -88,6 +116,8 @@ func printUsage() {
 	println("  backup    Perform a backup operation")
 	println("  restore   Restore from a backup")
 	println("  help      Show this help message")
+	println("  setup     Setup the database")
+	println("    --initialize   Initialize the database schema")
 }
 
 // printVersion prints the version information for the application.
