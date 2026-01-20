@@ -182,3 +182,16 @@ func AddDestination(db *sql.DB, region, bucket, accessKey, secretKey string) (in
 	}
 	return result.LastInsertId()
 }
+
+// Adds a new job to the database
+func AddJob(db *sql.DB, name, sourcePath, sourceType, sourceOptions string, destinationID int, hashAlgorithm string, maxDuration int) (int64, error) {
+	result, err := db.Exec(
+		`INSERT INTO jobs (name, source_path, source_type, source_options, destination_id, hash_algorithm, max_duration_seconds, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);`,
+		name, sourcePath, sourceType, sourceOptions, destinationID, hashAlgorithm, maxDuration,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
+}

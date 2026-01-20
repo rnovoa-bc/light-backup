@@ -40,6 +40,7 @@ func main() {
 	versionCommand := flag.NewFlagSet("version", flag.ExitOnError)
 	setupCommand := flag.NewFlagSet("setup", flag.ExitOnError)
 	newDestination := flag.NewFlagSet("new-destination", flag.ExitOnError)
+	newJob := flag.NewFlagSet("new-job", flag.ExitOnError)
 	testSource := flag.NewFlagSet("test-source", flag.ExitOnError)
 
 	switch os.Args[1] {
@@ -88,6 +89,28 @@ func main() {
 			log.Fatal("Error adding new destination:", err)
 		}
 		log.Printf("New destination [%v] added successfully", id)
+	case "new-job":
+		name := newJob.String("name", "", "Name of the job")
+		sourcePath := newJob.String("source_path", "", "Path of the source")
+		sourceType := newJob.String("source_type", "local", "Type of the source (local, nfs, etc.)")
+		sourceOptions := newJob.String("source_options", "", "Options for the source (JSON encoded)")
+		destinationID := newJob.Int("destination", 0, "ID of the destination")
+		hashAlgorithm := newJob.String("hash_algorithm", "xxhash", "Hash algorithm to use (blake3, xxhash)")
+		maxDuration := newJob.Int("max_duration", 604800, "Maximum duration of the job in seconds")
+		newJob.Parse(os.Args[2:])
+		if *name == "" || *sourcePath == "" || *destinationID == 0 {
+			log.Fatal("Parameters name, source_path, and destination_id are required")
+		}
+		db, err := utils.OpenDatabase(dbFile)
+		if err != nil {
+			log.Fatal("Error opening database:", err)
+		}
+		defer db.Close()
+		id, err := utils.AddJob(db, *name, *sourcePath, *sourceType, *sourceOptions, *destinationID, *hashAlgorithm, *maxDuration)
+		if err != nil {
+			log.Fatal("Error adding new job:", err)
+		}
+		log.Printf("New job [%v] added successfully", id)
 	case "test-source":
 		sourcePath := testSource.String("path", "", "Path of the source to test")
 		sourceType := testSource.String("type", "local", "Type of the source (local, nfs, etc.)")
